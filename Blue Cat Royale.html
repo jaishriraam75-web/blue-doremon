@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blue Cat Royale</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10243a;--paper:#ffffff;--nose:#e63946;--bell:#ffd23f;--blue:#2a8fd8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#e8f3ff;--paper:#0e2236}}
+:root[data-theme="dark"]{--ink:#e8f3ff;--paper:#0e2236}
+html,body{height:100%;margin:0;background:#8fd0ff;font-family:'Baloo 2',system-ui,sans-serif;overflow:hidden;color:var(--ink)}
+canvas{display:block}
+.pill{position:fixed;top:12px;background:var(--paper);color:var(--ink);border-radius:20px;padding:2px 14px;font-weight:800;font-size:18px;box-shadow:0 2px 0 rgba(0,0,0,.25)}
+#alive{left:12px}#kills{left:140px}#alt{right:12px}
+#bar{position:fixed;left:12px;bottom:14px;width:240px}
+#hpw{height:16px;background:rgba(0,0,0,.4);border-radius:8px;overflow:hidden;border:2px solid var(--paper)}
+#hp{height:100%;width:100%;background:var(--nose)}
+#ammo{margin-top:4px;font-weight:800;font-size:22px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+#cross{position:fixed;left:50%;top:50%;width:22px;height:22px;margin:-11px;border:3px solid var(--bell);border-radius:50%;box-sizing:border-box;display:none}
+#cross:after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;background:var(--nose);border-radius:50%}
+#msg{position:fixed;left:0;right:0;top:16%;text-align:center;font-size:26px;font-weight:800;color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.45);pointer-events:none}
+#hurt{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(transparent 45%,rgba(230,57,70,.7));transition:opacity .25s}
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(16,36,58,.55)}
+.card{background:var(--paper);color:var(--ink);border-radius:28px;padding:28px 36px;max-width:440px;text-align:center;box-shadow:0 6px 0 var(--blue)}
+h1{margin:0;font-size:52px;line-height:1;font-weight:800}
+.card p{margin:10px 0;font-size:18px}
+.keys{text-align:left;font-size:16px;margin:14px auto;display:inline-block}
+button{font:inherit;font-weight:800;font-size:24px;border:0;border-radius:18px;padding:6px 34px;background:var(--bell);color:#10243a;cursor:pointer;box-shadow:0 4px 0 #b88f00}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+</style></head><body>
+<div class="pill" id="alive"></div><div class="pill" id="kills"></div><div class="pill" id="alt"></div>
+<div id="cross"></div><div id="msg"></div><div id="hurt"></div>
+<div id="bar"><div id="hpw"><div id="hp"></div></div><div id="ammo"></div></div>
+<div class="ov" id="start"><div class="card"><h1>Blue Cat Royale</h1>
+<p>Jump from the plane, land on the island and be the last one standing.</p>
+<div class="keys">Space: jump from plane, open parachute<br>W A S D: move and steer<br>Shift: sprint<br>Mouse: look. Click: shoot<br>R: reload</div><br>
+<button id="go">Drop in</button></div></div>
+<div class="ov" id="end" style="display:none"><div class="card"><h1 id="et"></h1><p id="es"></p><button onclick="location.reload()">Play again</button></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(innerWidth,innerHeight);R.shadowMap.enabled=true;document.body.prepend(R.domElement);
+const S=new THREE.Scene();S.background=new THREE.Color(0x8fd0ff);S.fog=new THREE.Fog(0x8fd0ff,140,560);
+const C=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1400);
+S.add(new THREE.HemisphereLight(0xffffff,0x4a6a3a,.85));
+const sun=new THREE.DirectionalLight(0xfff2d0,.9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+const sc=sun.shadow.camera;sc.left=-90;sc.right=90;sc.top=90;sc.bottom=-90;sc.far=700;S.add(sun,sun.target);
+const SZ=900;
+function gh(x,z){const d=Math.hypot(x,z)/(SZ/2),f=Math.max(0,1-d*d);return(Math.sin(x*.012)*Math.cos(z*.015)*10+Math.sin(x*.03+z*.025)*3+10)*f-4}
+// terrain
+const tg=new THREE.PlaneGeometry(SZ,SZ,170,170);tg.rotateX(-Math.PI/2);
+const P=tg.attributes.position,cols=[],c=new THREE.Color();
+for(let i=0;i<P.count;i++){const x=P.getX(i),z=P.getZ(i),h=gh(x,z);P.setY(i,h);
+ if(h<.4)c.set(0xe8d9a0);else if(h<13)c.setHSL(.29,.5,.3+h*.012+Math.random()*.03);else c.set(0x9aa09a);cols.push(c.r,c.g,c.b)}
+tg.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));tg.computeVertexNormals();
+const terrain=new THREE.Mesh(tg,new THREE.MeshLambertMaterial({vertexColors:true}));terrain.receiveShadow=true;S.add(terrain);
+const sea=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshLambertMaterial({color:0x2b7fd0,transparent:true,opacity:.92}));sea.rotation.x=-Math.PI/2;sea.position.y=-1;S.add(sea);
+// buildings
+const B=[];const blocked=(x,z,m=.6)=>B.some(b=>Math.abs(x-b.x)<b.w+m&&Math.abs(z-b.z)<b.d+m);
+const pastel=[0xffd9a0,0xbfe3ff,0xffc2c9,0xd6f5c0,0xf6f0ff];
+for(let i=0,n=0;i<600&&n<30;i++){const x=(Math.random()-.5)*600,z=(Math.random()-.5)*600,h=gh(x,z);if(h<2||h>14||blocked(x,z,8))continue;
+ const w=4+Math.random()*3,d=4+Math.random()*3,ht=5+Math.random()*4;
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w*2,ht+4,d*2),new THREE.MeshLambertMaterial({color:pastel[n%5]}));m.position.set(x,h+ht/2-2,z);m.castShadow=m.receiveShadow=true;S.add(m);
+ const r=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*1.5,3,4),new THREE.MeshLambertMaterial({color:0xe63946}));r.position.set(x,h+ht+.5,z);r.rotation.y=Math.PI/4;r.castShadow=true;S.add(r);
+ B.push({x,z,w,d});n++}
+// trees
+const tm=new THREE.InstancedMesh(new THREE.ConeGeometry(2.4,8,7),new THREE.MeshLambertMaterial({color:0x2f8f4e}),400),dm=new THREE.Object3D();let tn=0;
+for(let i=0;i<5000&&tn<400;i++){const x=(Math.random()-.5)*800,z=(Math.random()-.5)*800,h=gh(x,z);if(h<1.5||h>18||blocked(x,z,4))continue;
+ const s=.7+Math.random()*.8;dm.position.set(x,h+4*s,z);dm.scale.setScalar(s);dm.updateMatrix();tm.setMatrixAt(tn++,dm.matrix)}
+tm.count=tn;tm.castShadow=true;S.add(tm);
+// characters
+function mk(col){const g=new THREE.Group(),m=(geo,c,x,y,z)=>{const o=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:c}));o.position.set(x,y,z);o.castShadow=true;g.add(o);return o},sp=r=>new THREE.SphereGeometry(r,16,12);
+ m(new THREE.CylinderGeometry(.55,.7,1.2,12),col,0,.7,0);m(sp(.78),col,0,1.95,0);m(sp(.6),0xffffff,0,1.85,-.3);
+ m(sp(.17),0xe63946,0,1.95,-.88);m(sp(.12),0x10243a,-.22,2.15,-.75);m(sp(.12),0x10243a,.22,2.15,-.75);m(sp(.16),0xffd23f,0,1.28,-.5);
+ m(new THREE.ConeGeometry(.25,.5,6),col,-.5,2.7,0);m(new THREE.ConeGeometry(.25,.5,6),col,.5,2.7,0);
+ m(new THREE.BoxGeometry(.15,.15,1.1),0x222222,.55,1.1,-.7);return g}
+const pm=mk(0x2a8fd8);pm.visible=false;S.add(pm);
+const chute=new THREE.Mesh(new THREE.SphereGeometry(3.2,18,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshLambertMaterial({color:0xffd23f,side:THREE.DoubleSide}));chute.position.y=4.4;chute.visible=false;pm.add(chute);
+// plane
+const plane=new THREE.Group(),pb=(w,h,d,col,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));o.position.set(x,y,z);o.castShadow=true;plane.add(o)};
+pb(18,3,3.4,0xffffff,0,0,0);pb(4,2.6,3,0xe63946,10,0,0);pb(3,.5,30,0x2a8fd8,0,0,0);pb(2,5,.5,0x2a8fd8,-8,2.5,0);pb(3,.4,10,0xffffff,-8,.5,0);S.add(plane);
+const pd=new THREE.Vector3(1,0,.3).normalize(),planePos=new THREE.Vector3(-400,170,-120);plane.rotation.y=-Math.atan2(pd.z,pd.x);
+// bots
+const bots=[],botCols=[0xff9a3c,0x8e5cf0,0x34c38f,0xf06292];
+for(let i=0;i<11;i++){let x,z;do{x=(Math.random()-.5)*700;z=(Math.random()-.5)*700}while(gh(x,z)<1||blocked(x,z,2));
+ const g=mk(botCols[i%4]);g.position.set(x,gh(x,z),z);S.add(g);const b={g,hp:75,wx:x,wz:z,t:0,sh:Math.random()*2};g.userData.bot=b;bots.push(b)}
+// state
+let mode='plane',started=false,over=false,yaw=Math.atan2(-pd.x,-pd.z),pitch=.3,vy=0,hp=100,ammo=30,reloading=false,kills=0,lastShot=0;
+const pos=new THREE.Vector3().copy(planePos);const keys={};
+const say=t=>{$('msg').textContent=t};
+function hud(){$('alive').textContent=(bots.length+1)+' alive';$('kills').textContent=kills+' down';$('hp').style.width=Math.max(0,hp)+'%';$('ammo').textContent=reloading?'Reloading...':'Ammo '+ammo+' / 30';
+ $('alt').textContent=(mode==='fall'||mode==='chute')?Math.max(0,Math.round(pos.y-gh(pos.x,pos.z)))+' m up':''}
+function jump(){mode='fall';pos.copy(planePos);pos.y-=3;vy=0;pm.visible=true;say('Dive with W A S D. Press Space to open the parachute.')}
+function openChute(){mode='chute';chute.visible=true;say('Steer to a safe spot and land.')}
+function land(){mode='ground';chute.visible=false;let n=0;while(gh(pos.x,pos.z)<.4&&n++<80){pos.x*=.96;pos.z*=.96}pos.y=gh(pos.x,pos.z);$('cross').style.display='block';say('Landed! Find the other players.');setTimeout(()=>{if(mode==='ground')say('')},3500)}
+function reload(){if(mode!=='ground'||reloading||ammo===30)return;reloading=true;setTimeout(()=>{ammo=30;reloading=false},1500)}
+addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(started&&!over){if(mode==='plane')jump();else if(mode==='fall')openChute()}}if(e.code==='KeyR')reload()});
+addEventListener('keyup',e=>keys[e.code]=false);
+addEventListener('mousemove',e=>{if(!started||over)return;yaw-=e.movementX*.0025;pitch=Math.max(-.5,Math.min(1.1,pitch+e.movementY*.0025))});
+const ray=new THREE.Raycaster();
+function tracer(a,b){const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),new THREE.LineBasicMaterial({color:0xffd23f}));S.add(l);setTimeout(()=>S.remove(l),60)}
+addEventListener('mousedown',()=>{const now=performance.now();if(!started||over||mode!=='ground'||reloading||now-lastShot<130)return;lastShot=now;
+ if(ammo<=0){reload();return}ammo--;ray.setFromCamera(new THREE.Vector2(0,0),C);ray.far=160;
+ const from=pos.clone();from.y+=1.2;const hit=ray.intersectObjects(bots.map(b=>b.g),true)[0];
+ if(hit){let o=hit.object;while(o&&!o.userData.bot)o=o.parent;const b=o.userData.bot;tracer(from,hit.point);b.hp-=25;b.g.scale.setScalar(1.12);setTimeout(()=>b.g.scale.setScalar(1),80);
+  if(b.hp<=0){S.remove(b.g);bots.splice(bots.indexOf(b),1);kills++;if(!bots.length)finish(true)}}
+ else tracer(from,ray.ray.at(60,new THREE.Vector3()));if(ammo===0)reload()});
+function finish(win){over=true;document.exitPointerLock&&document.exitPointerLock();$('end').style.display='flex';$('et').textContent=win?'Last one standing':'Knocked out';$('es').textContent='You took down '+kills+' of 11 players.'}
+$('go').onclick=()=>{$('start').style.display='none';started=true;try{R.domElement.requestPointerLock()}catch(e){}say('Look around with the mouse. Press Space to jump!')};
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix()});
+const clock=new THREE.Clock();
+function update(dt){
+ const f=(keys.KeyW?1:0)-(keys.KeyS?1:0),r=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+ let mx=-Math.sin(yaw)*f+Math.cos(yaw)*r,mz=-Math.cos(yaw)*f-Math.sin(yaw)*r;const l=Math.hypot(mx,mz);if(l>0){mx/=l;mz/=l}
+ planePos.addScaledVector(pd,35*dt);plane.position.copy(planePos);
+ if(mode==='plane'){pos.copy(planePos);if(planePos.x>380)jump()}
+ else if(mode==='fall'||mode==='chute'){let sp;
+  if(mode==='fall'){vy=Math.max(vy-40*dt,-45);sp=26;if(pos.y-gh(pos.x,pos.z)<45)openChute()}else{vy+=(-7-vy)*Math.min(1,3*dt);sp=14}
+  pos.x=Math.max(-430,Math.min(430,pos.x+mx*sp*dt));pos.z=Math.max(-430,Math.min(430,pos.z+mz*sp*dt));pos.y+=vy*dt;
+  if(pos.y<=gh(pos.x,pos.z))land()}
+ else{const sp=keys.ShiftLeft?13:8,nx=pos.x+mx*sp*dt,nz=pos.z+mz*sp*dt;if(gh(nx,nz)>.3&&!blocked(nx,nz)){pos.x=nx;pos.z=nz}pos.y=gh(pos.x,pos.z);
+  bots.forEach(b=>{const g=b.g,dx=b.wx-g.position.x,dz=b.wz-g.position.z,dist=Math.hypot(dx,dz);
+   if(dist<2||(b.t-=dt)<0){b.wx=g.position.x+(Math.random()-.5)*80;b.wz=g.position.z+(Math.random()-.5)*80;b.t=6}
+   else{const nx=g.position.x+dx/dist*4*dt,nz=g.position.z+dz/dist*4*dt;if(gh(nx,nz)>.4&&!blocked(nx,nz,1)){g.position.x=nx;g.position.z=nz;g.rotation.y=Math.atan2(-dx,-dz)}else b.t=0}
+   g.position.y=gh(g.position.x,g.position.z);
+   const px=pos.x-g.position.x,pz=pos.z-g.position.z,pdist=Math.hypot(px,pz);
+   if(pdist<45){g.rotation.y=Math.atan2(-px,-pz);if((b.sh-=dt)<0){b.sh=1.2+Math.random();tracer(g.position.clone().setY(g.position.y+1.2),pos.clone().setY(pos.y+1.2));
+    if(Math.random()<.35){hp-=8;$('hurt').style.opacity=1;setTimeout(()=>$('hurt').style.opacity=0,200);if(hp<=0)finish(false)}}}})}
+ pm.position.copy(pos);pm.rotation.y=yaw;pm.visible=mode!=='plane';
+ const d=mode==='ground'?5.5:mode==='plane'?18:10,cp=Math.cos(pitch),up=mode==='plane'?0:1.6;
+ C.position.set(pos.x+Math.sin(yaw)*cp*d,pos.y+up+Math.sin(pitch)*d,pos.z+Math.cos(yaw)*cp*d);
+ C.position.y=Math.max(C.position.y,gh(C.position.x,C.position.z)+1);C.lookAt(pos.x,pos.y+up,pos.z);
+ sun.target.position.copy(pos);sun.position.set(pos.x+150,pos.y+250,pos.z+100);hud()}
+hud();
+(function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05);if(started&&!over)update(dt);else{plane.position.copy(planePos);C.position.set(pos.x+Math.sin(yaw)*18,pos.y+6,pos.z+Math.cos(yaw)*18);C.lookAt(pos)}R.render(S,C)})();
+</script></body></html>
